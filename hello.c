@@ -12,5 +12,5 @@ void main(void) {
   int a = 1;
   int b = 10;
   OUTPUT(0x1000,a+b);
-  OUTPUT(0x1000,0xdeadbeef);
+  OUTPUT(0x1020,0xdeadbeef);
 }

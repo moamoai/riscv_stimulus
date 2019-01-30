@@ -71,16 +71,31 @@ AND  = (lambda x,y: x&y)
 
 func3_OP_LIST = [ADD, SLL, SLT, SLTI, XOR, SR, OR, AND]
 
+def get_compllement(data, bit_num):
+  if(data >= (1<<(bit_num-1))):
+    complement = (data - (1<<(bit_num-1))) * -1
+  else:
+    complement = data
+  return complement
+  
 op = ""
 for time in range(1, 0x20):
   inst   = bin_list_4B[int(pc/4)]
   opcode = get_opcode(inst)
   # 0010011['ADDI', 'SLTI', 'SLTIU', 'XORI', 'ORI', 'ANDI', 'SLLI', 'SRLI', 'SRAI']
   if   opcode == 0b0010011:
-    rd    = get_bit(inst, 11,  7) 
-    func3 = get_bit(inst, 14, 12) 
-    rs1   = get_bit(inst, 19, 15) 
-    imm1  = get_bit(inst, 31, 20) 
+    rd      = get_bit(inst, 11,  7) 
+    func3   = get_bit(inst, 14, 12) 
+    rs1     = get_bit(inst, 19, 15) 
+    imm1    = get_bit(inst, 30, 20) 
+    imm1_s  = get_bit(inst, 31, 31) 
+    print("pc  : 0x{0:08x}".format(pc));
+    print("imm1      : 0d{0}".format(imm1));
+    # imm1 = get_compllement(imm1, 12)
+    if(imm1_s == 1):
+      imm1 = -((~imm1 & 0x7FF) + 1)
+    print("imm1(comp): 0d{0}".format(imm1));
+    
     x_r[rd] = func3_OP_LIST[func3](x_r[rs1], imm1)
   # 0100011['SB', 'SH', 'SW']
   elif opcode == 0b0100011:
@@ -113,15 +128,16 @@ for time in range(1, 0x20):
     imm10_01 = get_bit(inst, 30, 21) 
     imm20    = get_bit(inst, 31, 31) 
     imm = (imm20<<20) + (imm10_01<<1) + (imm11<<11) + (imm19_12<<12)
-    print("imm19_12:" + str(imm19_12))
-    print("imm11   :" + str(imm11   ))
-    print("imm10_01:" + str(imm10_01))
-    print("imm20   :" + str(imm20   ))
     x_r[rd] = pc + 4
     op = "jal"
+  # 0110111['LUI']
+  elif opcode == 0b0110111:
+    rd        = get_bit(inst, 11,  7) 
+    imm_31_12 = get_bit(inst, 31, 12) 
+    x_r[rd] = (imm_31_12<<12)
   else:
     print("ERROR no opcode")
-    print("pc: 0x{0:08x}".format(pc*4))
+    print("pc: 0x{0:08x}".format(pc))
     print("opcode: 0b{0:07b}".format(opcode))
     exit()
 
