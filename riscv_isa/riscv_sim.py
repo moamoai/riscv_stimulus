@@ -2,12 +2,11 @@
 # coding: utf-8
 #
 
-# str = input()
-# print(str)
-
 import sys
 
-pc  = 0
+#pc      = 0
+pc      = 0x100
+cb_flag = 0
 x_r = [0] * 32 # x0->x31
 DMEM_DIR = {}
 
@@ -15,8 +14,15 @@ DMEM_DIR = {}
 # INPUT Inst
 #############
 inst_list_4B = []
-for line in sys.stdin:
-   inst_list_4B.append(line.strip())
+filepath = "./test_4B.hex"
+with open(filepath) as fp:
+   line = fp.readline()
+   while line:
+     inst_list_4B.append(line.strip())
+     line = fp.readline()
+
+# # for line in sys.stdin:
+#    inst_list_4B.append(line.strip())
 
 
 #############
@@ -68,18 +74,27 @@ XOR  = (lambda x,y: x^y)
 SR   = (lambda x,y: x>>y)
 OR   = (lambda x,y: x|y)
 AND  = (lambda x,y: x&y)
-
 func3_OP_LIST = [ADD, SLL, SLT, SLTI, XOR, SR, OR, AND]
 
+BEQ   = (lambda x,y: x==y)
+BNE   = (lambda x,y: x!=y)
+BLT   = (lambda x,y: x<y)
+BGE   = (lambda x,y: x>=y)
+BLTU  = (lambda x,y: x<y)
+BGEU  = (lambda x,y: x>y)
+func3_CB_LIST = [BEQ, BNE,  "",   "", BLT, BGE, BLTU, BGEU]
+
 def get_compllement(data, bit_num):
-  if(data >= (1<<(bit_num-1))):
-    complement = (data - (1<<(bit_num-1))) * -1
-  else:
-    complement = data
+  if(imm1_s == 1):
+    complement = -((~imm1 & 0x7FF) + 1)
+  # if(data >= (1<<(bit_num-1))):
+  #   complement = (data - (1<<(bit_num-1))) * -1
+  # else:
+  #   complement = data
   return complement
   
 op = ""
-for time in range(1, 0x20):
+for time in range(1, 0x800):
   inst   = bin_list_4B[int(pc/4)]
   opcode = get_opcode(inst)
   # 0010011['ADDI', 'SLTI', 'SLTIU', 'XORI', 'ORI', 'ANDI', 'SLLI', 'SRLI', 'SRAI']
@@ -89,12 +104,12 @@ for time in range(1, 0x20):
     rs1     = get_bit(inst, 19, 15) 
     imm1    = get_bit(inst, 30, 20) 
     imm1_s  = get_bit(inst, 31, 31) 
-    print("pc  : 0x{0:08x}".format(pc));
-    print("imm1      : 0d{0}".format(imm1));
+    # print("pc  : 0x{0:08x}".format(pc));
+    # print("imm1      : 0d{0}".format(imm1));
     # imm1 = get_compllement(imm1, 12)
     if(imm1_s == 1):
       imm1 = -((~imm1 & 0x7FF) + 1)
-    print("imm1(comp): 0d{0}".format(imm1));
+    # print("imm1(comp): 0d{0}".format(imm1));
     
     x_r[rd] = func3_OP_LIST[func3](x_r[rs1], imm1)
   # 0100011['SB', 'SH', 'SW']
@@ -130,11 +145,43 @@ for time in range(1, 0x20):
     imm = (imm20<<20) + (imm10_01<<1) + (imm11<<11) + (imm19_12<<12)
     x_r[rd] = pc + 4
     op = "jal"
+    if(imm20 == 1):
+      imm = -((~imm & 0x7FFF) + 1)
   # 0110111['LUI']
   elif opcode == 0b0110111:
     rd        = get_bit(inst, 11,  7) 
     imm_31_12 = get_bit(inst, 31, 12) 
     x_r[rd] = (imm_31_12<<12)
+  # 1110011['ECALL', 'EBREAK', 'CSRRW', 'CSRRS', 'CSRRC', 'CSRRWI', 'CSRRSI', 'CSRRCI']
+  elif opcode == 0b1110011:
+    csr    = get_bit(inst, 31, 20) 
+    rs1    = get_bit(inst, 19, 15) 
+    funct3 = get_bit(inst, 14, 12) 
+    rd     = get_bit(inst, 11, 7 ) 
+    x_r[rd] = 4
+  # 1100011['BEQ', 'BNE', 'BLT', 'BGE', 'BLTU', 'BGEU']
+  elif opcode == 0b1100011:
+    rs1 = get_bit(inst, 19, 15) 
+    rs2 = get_bit(inst, 24, 20) 
+    func = get_bit(inst, 14, 12) 
+    imm_4_1   = get_bit(inst, 11, 8) 
+    imm_11    = get_bit(inst, 7, 7) 
+    imm_10_5  = get_bit(inst, 30, 25) 
+    imm_12    = get_bit(inst, 31, 31) 
+    imm =  (imm_4_1  <<  1) \
+         + (imm_11   << 11) \
+         + (imm_10_5 <<  5) \
+         + (imm_12   << 12) 
+    cb_flag = func3_CB_LIST[func](x_r[rs1], x_r[rs2])
+    if(imm_12 == 1):
+      imm = -((~imm & 0x7FF) + 1)
+    print("# func: {0} cb_flag: {1} xrs1: {2} xrs2: {3}".format(func, cb_flag, x_r[rs1], x_r[rs2]))
+  # 0010111['AUIPC']
+  elif opcode == 0b0010111:
+    pass
+  # 0001111['FENCE', 'FENCE.I']
+  elif opcode == 0b0001111:
+    pass
   else:
     print("ERROR no opcode")
     print("pc: 0x{0:08x}".format(pc))
@@ -145,6 +192,10 @@ for time in range(1, 0x20):
   dump_registers()
   if op == "jal":
     pc      = pc + imm
+  elif(cb_flag):
+    # print("# BRANCH")
+    pc = pc + imm
+    cb_flag = 0
   else:
     pc += 4
   op = ""
